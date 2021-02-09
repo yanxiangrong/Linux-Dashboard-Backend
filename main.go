@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"log"
@@ -14,6 +15,15 @@ import (
 type State struct {
 	CpuUsage int `json:"cpu_usage_per"`
 	MemUsage int `json:"mem-usage_per"`
+}
+
+type Disk struct {
+	Devices    string `json:"devices"`
+	MountPoint string `json:"mount_point"`
+	FsType     string `json:"fs_type"`
+	Total      int    `json:"total"`
+	Used       int    `json:"used"`
+	Free       int    `json:"free"`
 }
 
 type Info struct {
@@ -30,7 +40,17 @@ type Info struct {
 		Used      int `json:"used"`
 		Free      int `json:"free"`
 	}
-	//todo Host, Disk, IO
+	Host struct {
+		HostName        string `json:"host_name"`
+		Uptime          int    `json:"uptime"`
+		Process         int    `json:"process"`
+		OS              string `json:"os"`
+		KernelVersion   string `json:"kernel_version"`
+		KernelArch      string `json:"kernel_arch"`
+		Platform        string `json:"platform"`
+		PlatformVersion string `json:"platform_version"`
+	}
+	Disks []Disk
 }
 
 const HistoryLength = 100
@@ -78,16 +98,52 @@ func getInfo() Info {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
+	info.Cpu.Cores = int(cpuInfos[0].Cores)
+	info.Cpu.ModelName = cpuInfos[0].ModelName
+
 	cpuLoad, err := load.Avg()
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	info.Cpu.Cores = int(cpuInfos[0].Cores)
-	info.Cpu.ModelName = cpuInfos[0].ModelName
 	info.Cpu.Load1 = float32(cpuLoad.Load1)
 	info.Cpu.Load5 = float32(cpuLoad.Load5)
 	info.Cpu.Load15 = float32(cpuLoad.Load15)
-	//todo Mem, Host, Disk, IO
+
+	hInfo, err := host.Info()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	info.Host.HostName = hInfo.Hostname
+	info.Host.KernelArch = hInfo.KernelArch
+	info.Host.KernelVersion = hInfo.KernelVersion
+	info.Host.OS = hInfo.OS
+	info.Host.Platform = hInfo.Platform
+	info.Host.PlatformVersion = hInfo.PlatformVersion
+	info.Host.Process = int(hInfo.Procs)
+	info.Host.Uptime = int(hInfo.Uptime)
+
+	partitions, err := disk.Partitions(true)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	for _, partition := range partitions {
+		usage, _ := disk.Usage(partition.Mountpoint)
+		info.Disks = append(info.Disks, Disk{
+			Devices:    partition.Device,
+			FsType:     partition.Fstype,
+			MountPoint: partition.Mountpoint,
+			Total:      int(usage.Total),
+			Used:       int(usage.Used),
+			Free:       int(usage.Free),
+		})
+		//info.Disk[i].Devices = partition.Device
+		//info.Disk[i].FsType = partition.Fstype
+		//info.Disk[i].MountPoint = partition.Mountpoint
+		//usage, _ := disk.Usage(partition.Mountpoint)
+		//info.Disk[i].Total = int(usage.Total)
+		//info.Disk[i].Used = int(usage.Used)
+		//info.Disk[i].Free = int(usage.Free)
+	}
 	return info
 }
 
@@ -96,7 +152,6 @@ func MemUsage() int {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	fmt.Printf("mem info:%v\n", memInfo)
 	return int(memInfo.UsedPercent + .5)
 }
 
