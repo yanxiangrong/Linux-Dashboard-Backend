@@ -14,7 +14,7 @@ import (
 
 type State struct {
 	CpuUsage int `json:"cpu_usage_per"`
-	MemUsage int `json:"mem-usage_per"`
+	MemUsage int `json:"mem_usage_per"`
 }
 
 type Disk struct {
@@ -121,6 +121,15 @@ func getInfo() Info {
 	info.Host.PlatformVersion = hInfo.PlatformVersion
 	info.Host.Process = int(hInfo.Procs)
 	info.Host.Uptime = int(hInfo.Uptime)
+
+	memInfo, err := mem.VirtualMemory()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	info.Memory.Total = int(memInfo.Total)
+	info.Memory.Free = int(memInfo.Free)
+	info.Memory.Used = int(memInfo.Used)
+	info.Memory.Available = int(memInfo.Available)
 
 	partitions, err := disk.Partitions(true)
 	if err != nil {
