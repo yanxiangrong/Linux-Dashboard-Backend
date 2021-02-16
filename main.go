@@ -13,8 +13,9 @@ import (
 )
 
 type State struct {
-	CpuUsage int `json:"cpu_usage_per"`
-	MemUsage int `json:"mem_usage_per"`
+	CpuUsage  int `json:"cpu_usage"`
+	MemUsage  int `json:"mem_usage"`
+	SwapUsage int `json:"swap_usage"`
 }
 
 type Disk struct {
@@ -27,7 +28,8 @@ type Disk struct {
 }
 
 type Info struct {
-	Cpu struct {
+	ServerTime int `json:"server_time"`
+	Cpu        struct {
 		Cores     int     `json:"cores"`
 		ModelName string  `json:"model_name"`
 		Load1     float32 `json:"load_1"`
@@ -40,6 +42,11 @@ type Info struct {
 		Used      int `json:"used"`
 		Free      int `json:"free"`
 	}
+	Swap struct {
+		Total int `json:"total"`
+		Used  int `json:"used"`
+		Free  int `json:"free"`
+	} `json:"swap"`
 	Host struct {
 		HostName        string `json:"host_name"`
 		Uptime          int    `json:"uptime"`
@@ -131,6 +138,14 @@ func getInfo() Info {
 	info.Memory.Used = int(memInfo.Used)
 	info.Memory.Available = int(memInfo.Available)
 
+	swap, err := mem.SwapMemory()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	info.Swap.Total = int(swap.Total)
+	info.Swap.Free = int(swap.Free)
+	info.Swap.Used = int(swap.Used)
+
 	partitions, err := disk.Partitions(true)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -153,6 +168,7 @@ func getInfo() Info {
 		//info.Disk[i].Used = int(usage.Used)
 		//info.Disk[i].Free = int(usage.Free)
 	}
+	info.ServerTime = int(time.Now().Unix())
 	return info
 }
 
@@ -164,10 +180,19 @@ func MemUsage() int {
 	return int(memInfo.UsedPercent + .5)
 }
 
+func SwapUsage() int {
+	swap, err := mem.SwapMemory()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	return int(swap.UsedPercent + .5)
+}
+
 func updateState() {
 	for {
 		currentState.CpuUsage = CpuUsage()
 		currentState.MemUsage = MemUsage()
+		currentState.SwapUsage = SwapUsage()
 		information = getInfo()
 		HistoryAppend(currentState)
 		//fmt.Println(currentState)
